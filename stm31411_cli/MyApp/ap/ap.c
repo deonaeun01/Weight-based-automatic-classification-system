@@ -395,8 +395,13 @@ void loadCellSystemTask(void *argument)
         /* ── 자동 출력 ────────────────────────────────────── */
         if (g_loadcell_auto_print || g_system_enabled)
             cliPrintf("[LoadCell] raw=%ld  weight=%.2f g\r\n",
+          
                       (long)raw, g_stable_weight);
-
+/* ── monitor 전송 ─────────────────────────────────────────── */
+if (isMonitoringOn()) {
+    float w = g_stable_weight;
+    monitorUpdateValue(ID_ENV_HUMI, TYPE_FLOAT, &w);  // ID 11 사용
+}
         prev_weight_g = g_stable_weight;
         osDelay(LOADCELL_TASK_PERIOD_MS);
     }

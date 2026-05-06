@@ -599,6 +599,24 @@ void MainWindow::onPacketParsed(QMap<int, SensorNode> nodes)
             // 표시용 (로그에만)
             break;
         }
+        case ID_ENV_HUMI:  // 11 - 무게 (ap.c에서 weight 전송용으로 사용)
+{
+    float w = n.value.toFloat();
+    m_lastWeight = w;
+    m_lblWeight->setText(QString("%1 g").arg(w, 0, 'f', 1));
+
+    if (w < 5.0f) {
+        m_lblSortResult->setText("---");
+        m_lblSortResult->setStyleSheet("font-size:32px;font-weight:bold;color:#8b949e;");
+    } else if (w >= m_refWeight) {
+        m_lblSortResult->setText("HEAVY");
+        m_lblSortResult->setStyleSheet("font-size:32px;font-weight:bold;color:#e3b341;");
+    } else {
+        m_lblSortResult->setText("LIGHT");
+        m_lblSortResult->setStyleSheet("font-size:32px;font-weight:bold;color:#3fb950;");
+    }
+    break;
+}
         default:
         {
             // INT32 값 → weight로 해석 (ap.c에서 어떤 ID로 보내는지 확인 후 수정)
