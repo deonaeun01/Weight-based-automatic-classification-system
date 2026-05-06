@@ -104,18 +104,48 @@ volatile float   g_stable_last   = 0.0f;
 volatile uint8_t g_stable_count  = 0;
 volatile float   g_stable_weight = 0.0f;
 
+// static void updateStable(float weight)
+// {
+//     float diff = weight - g_stable_last;
+//     if (diff < 0.0f) diff = -diff;
+
+//     if (diff <= STABLE_THRESH_G)
+//     {
+//         g_stable_count++;
+//         if (g_stable_count >= STABLE_COUNT)
+//         {
+//             g_stable_weight = weight;
+//             g_stable_count  = STABLE_COUNT;
+//         }
+//     }
+//     else
+//     {
+//         g_stable_count  = 0;
+//         g_stable_weight = weight;
+//     }
+//     g_stable_last = weight;
+// }
+
+
 static void updateStable(float weight)
 {
-    float diff = weight - g_stable_last;
-    if (diff < 0.0f) diff = -diff;
+    float diff     = weight - g_stable_last;      // 부호 유지
+    float abs_diff = diff < 0.0f ? -diff : diff;  // 절댓값은 별도
 
-    if (diff <= STABLE_THRESH_G)
+    if (abs_diff <= STABLE_THRESH_G)
     {
-        g_stable_count++;
-        if (g_stable_count >= STABLE_COUNT)
+        if (diff > 1.0f)  // 올라가는 추세면 리셋
         {
-            g_stable_weight = weight;
-            g_stable_count  = STABLE_COUNT;
+            g_stable_count = 0;
+        }
+        else
+        {
+            g_stable_count++;
+            if (g_stable_count >= STABLE_COUNT)
+            {
+                g_stable_weight = weight;
+                g_stable_count  = STABLE_COUNT;
+            }
         }
     }
     else
