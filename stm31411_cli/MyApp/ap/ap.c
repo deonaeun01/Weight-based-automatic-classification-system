@@ -1,6 +1,7 @@
 #include "ap.h"
 #include <math.h>
 #include "pca9685.h"
+#include "pir.h"
 
 /* ═══════════════════════════════════════════════════════════
  *  LoadCell Task
@@ -1003,6 +1004,7 @@ void apInit()
   cliAdd("conv",      cliConveyor);
   cliAdd("loadcell",  cliLoadCell);   /* ← LoadCell CLI 추가 */
   cliAdd("flag",      cliFlag);
+  cliAdd("pir", cliPir);
   cliAdd("system",    cliSystem);     /* ← 시스템 on/off */
 
   if (pca9685Init() == true)
@@ -1025,6 +1027,7 @@ void apMain(void)
   while (1)
   {
     cliMain();
+    pirCheck();  
     osDelay(1);
   }
 }
