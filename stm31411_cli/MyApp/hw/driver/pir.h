@@ -6,6 +6,7 @@
 #include <stdint.h>
 
 void pirInit(void);
+void pirEnable(bool enable);
 bool pirRead(void);
 void pirCheck(void);
 void cliPir(uint8_t argc, char **argv);

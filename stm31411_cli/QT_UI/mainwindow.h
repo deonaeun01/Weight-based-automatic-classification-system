@@ -1,13 +1,12 @@
 #pragma once
 #include <QMainWindow>
+#include <QTimer>
 #include <QLabel>
 #include <QPushButton>
 #include <QComboBox>
-#include <QTextEdit>
 #include <QLineEdit>
+#include <QTextEdit>
 #include <QProgressBar>
-#include <QTimer>
-#include <QMap>
 #include "serialworker.h"
 #include "packetparser.h"
 
@@ -18,86 +17,87 @@ public:
     explicit MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
 
-private slots:
-    void onPacketParsed(QMap<int, SensorNode> nodes);
-    void onLogLine(const QString &line);
-    void onConnected(const QString &portName);
-    void onDisconnected();
-    void onSerialError(const QString &msg);
-
-    void onBtnConnect();
-    void onBtnSystemOn();
-    void onBtnSystemOff();
-    void onBtnSystemReset();
-    void onBtnTare();
-    void onBtnMonOn();
-    void onBtnSendCli();
-    void onBtnSaveSettings();
-    void refreshPorts();
-
 private:
     void setupUi();
     void setupConnections();
     void applyStyles();
     void updateStateLabel(const QString &state);
     void setConnectedState(bool connected);
+    void updateWeightDisplay(float w);          // ← 추가: 무게 공통 업데이트
 
-    // ── UI 위젯 ──────────────────────────────────────────
-    // Serial panel
-    QComboBox    *m_cbPort;
-    QPushButton  *m_btnConnect;
-    QLabel       *m_lblConnStatus;
+    // ── 시리얼 / 파서 ────────────────────────────────────
+    SerialWorker  *m_serial   = nullptr;
+    PacketParser  *m_parser   = nullptr;
+    QTimer        *m_portTimer = nullptr;
 
-    // System control
-    QPushButton  *m_btnSysOn;
-    QPushButton  *m_btnSysOff;
-    QPushButton  *m_btnSysReset;
-    QPushButton  *m_btnTare;
-    QPushButton  *m_btnMonOn;
+    // ── Row 1: System Control ────────────────────────────
+    QPushButton *m_btnSysOn    = nullptr;
+    QPushButton *m_btnSysOff   = nullptr;
+    QPushButton *m_btnSysReset = nullptr;
+    QPushButton *m_btnTare     = nullptr;
 
-    // State visualization
-    QLabel       *m_lblState1;   // Weight Detection
-    QLabel       *m_lblState2;   // Robot Arm Action
-    QLabel       *m_lblState3;   // Conveyor Belt
-    QLabel       *m_lblState4;   // Sorting Complete
+    // ── PIR Sensor Control ───────────────────────────────
+    QLabel      *m_lblPirStatus  = nullptr;   // "● INACTIVE" / "⚠ DETECTED"
+    QTimer      *m_pirTimer      = nullptr;   // 감지 경과 시간 업데이트용
+    int          m_pirElapsedSec = 0;
 
-    // Weight display
-    QLabel       *m_lblWeight;
-    QLabel       *m_lblSortResult;
-    QLabel       *m_lblRefWeight;
+    // ── Row 1: Operation Status ──────────────────────────
+    QLabel *m_lblState1 = nullptr;
+    QLabel *m_lblState2 = nullptr;
+    QLabel *m_lblState3 = nullptr;
+    QLabel *m_lblState4 = nullptr;
 
-    // Counters
-    QLabel       *m_lblHeavyCount;
-    QLabel       *m_lblLightCount;
-    QProgressBar *m_pbHeavy;
-    QProgressBar *m_pbLight;
+    // ── Row 2: Serial ────────────────────────────────────
+    QComboBox   *m_cbPort       = nullptr;
+    QPushButton *m_btnConnect   = nullptr;
+    QLabel      *m_lblConnStatus = nullptr;
 
-    // Sensor values
-    QLabel       *m_lblTemp;
-    QLabel       *m_lblLed;
-    QLabel       *m_lblUptime;
+    // ── Row 2: Weight ────────────────────────────────────
+    QLabel *m_lblWeight     = nullptr;
+    QLabel *m_lblSortResult = nullptr;
+    QLabel *m_lblRefWeight  = nullptr;
 
-    // Log
-    QTextEdit    *m_logEdit;
+    // ── Row 2: Counters ──────────────────────────────────
+    QProgressBar *m_pbHeavy      = nullptr;
+    QProgressBar *m_pbLight      = nullptr;
+    QLabel       *m_lblHeavyCount = nullptr;
+    QLabel       *m_lblLightCount = nullptr;
 
-    // CLI
-    QLineEdit    *m_cliInput;
-    QPushButton  *m_btnSendCli;
+    // ── Row 3: Parameters ────────────────────────────────
+    QLineEdit   *m_edRefWeight     = nullptr;
+    QPushButton *m_btnSaveSettings = nullptr;
+    // 수정 ③: m_lblTemp, m_lblLed 제거
 
-    // Settings
-    QLineEdit    *m_edRefWeight;
-    QPushButton  *m_btnSaveSettings;
+    // ── Row 3: Log / CLI ────────────────────────────────
+    QTextEdit   *m_logEdit   = nullptr;
+    QLineEdit   *m_cliInput  = nullptr;
+    QPushButton *m_btnSendCli = nullptr;
 
-    // ── 내부 상태 ──────────────────────────────────────────
-    SerialWorker *m_serial;
-    PacketParser *m_parser;
-    QTimer       *m_portTimer;
+    // ── 상태 변수 ────────────────────────────────────────
+    bool    m_isConnected = false;
+    bool    m_pirEnabled  = false;    // PIR 활성화 상태
+    bool    m_pirDetecting = false;   // 현재 감지 중 여부
+    float   m_lastWeight  = 0.0f;
+    float   m_refWeight   = 60.0f;
+    int     m_heavyCount  = 0;
+    int     m_lightCount  = 0;
+    QString m_currentState;
 
-    bool    m_isConnected  = false;
-    bool    m_monOn        = false;
-    int     m_heavyCount   = 0;
-    int     m_lightCount   = 0;
-    float   m_refWeight    = 60.0f;  // CLASSIFY_HEAVY_G
-    float   m_lastWeight   = 0.0f;
-    QString m_currentState = "IDLE";
+private slots:
+    void onPacketParsed(QMap<int, SensorNode> nodes);
+    void onLogLine(const QString &line);
+    void onConnected(const QString &portName);
+    void onDisconnected();
+    void onSerialError(const QString &msg);
+    void onBtnConnect();
+    void onBtnSystemOn();
+    void onBtnSystemOff();
+    void onBtnSystemReset();
+    void onBtnTare();
+    void onBtnSendCli();
+    void onBtnSaveSettings();
+    void refreshPorts();
+
+    void onPirTimerTick();
+    void updatePirStatus(bool enabled, bool detecting);
 };

@@ -18,7 +18,7 @@ enum SensorID {
     ID_IMU_ACCEL_X    = 70,
     ID_IMU_ACCEL_Y    = 71,
     ID_IMU_ACCEL_Z    = 72,
-    ID_ENV_HUMI = 11,  // 무게 데이터로 임시 활용
+      // 무게 데이터로 임시 활용
 };
 
 enum DataType {

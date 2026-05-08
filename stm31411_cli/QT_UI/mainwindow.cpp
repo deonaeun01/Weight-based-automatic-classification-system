@@ -10,6 +10,7 @@
 #include <QSerialPortInfo>
 #include <QFont>
 #include <QFontDatabase>
+#include <QRegularExpression>       // ← 추가
 
 // ── 색상 상수 ───────────────────────────────────────────────
 static const QString CLR_BG        = "#0d1117";
@@ -26,15 +27,6 @@ static const QString CLR_MUTED     = "#8b949e";
 static const QString CLR_ACTIVE    = "#238636";
 static const QString CLR_INACTIVE  = "#21262d";
 
-// ── 헬퍼: 그룹박스 만들기 ──────────────────────────────────
-static QGroupBox* makeGroup(const QString &title, const QString &numTag = "")
-{
-    QGroupBox *g = new QGroupBox();
-    QString label = numTag.isEmpty() ? title : QString("%1  <span style='color:#8b949e;font-size:11px;'>%2</span>").arg(title).arg(numTag);
-    g->setTitle(title + (numTag.isEmpty() ? "" : "  " + numTag));
-    return g;
-}
-
 static QLabel* makeSeparator()
 {
     QLabel *l = new QLabel();
@@ -48,6 +40,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     m_serial    = new SerialWorker(this);
     m_parser    = new PacketParser(this);
     m_portTimer = new QTimer(this);
+    m_pirTimer  = new QTimer(this);
+    m_pirTimer->setInterval(1000);
 
     setupUi();
     setupConnections();
@@ -56,7 +50,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     setWindowTitle("ROBOTIC WEIGHT SORTING SYSTEM CONTROLLER");
     resize(1200, 760);
 
-    // 포트 목록 주기적 갱신
     m_portTimer->start(2000);
     refreshPorts();
 }
@@ -78,7 +71,6 @@ void MainWindow::setupUi()
     // ══════════════════════════════════════════════════════
     //  ROW 1:  [SYSTEM CONTROL]  [OPERATION STATUS]
     // ══════════════════════════════════════════════════════
-    // ── 1-1: System Control ─────────────────────────────
     QGroupBox *grpSysCtrl = new QGroupBox("⚙  SYSTEM CONTROL  ①");
     grpSysCtrl->setObjectName("panelGroup");
 
@@ -86,20 +78,17 @@ void MainWindow::setupUi()
     m_btnSysOff   = new QPushButton("SYSTEM OFF");
     m_btnSysReset = new QPushButton("SYSTEM RESET");
     m_btnTare     = new QPushButton("TARE");
-    m_btnMonOn    = new QPushButton("MON ON");
 
     m_btnSysOn->setObjectName("btnGreen");
     m_btnSysOff->setObjectName("btnRed");
     m_btnSysReset->setObjectName("btnBlue");
     m_btnTare->setObjectName("btnOrange");
-    m_btnMonOn->setObjectName("btnBlue");
 
     QGridLayout *sysCtrlLayout = new QGridLayout(grpSysCtrl);
     sysCtrlLayout->addWidget(m_btnSysOn,    0, 0);
     sysCtrlLayout->addWidget(m_btnTare,     0, 1, 2, 1);
     sysCtrlLayout->addWidget(m_btnSysOff,   1, 0);
     sysCtrlLayout->addWidget(m_btnSysReset, 2, 0);
-    sysCtrlLayout->addWidget(m_btnMonOn,    2, 1);
 
     QLabel *tLabel = new QLabel("Zero calibration");
     tLabel->setObjectName("labelMuted");
@@ -122,34 +111,45 @@ void MainWindow::setupUi()
     }
 
     QHBoxLayout *stateRow = new QHBoxLayout();
+    stateRow->setSpacing(4);
+    stateRow->setContentsMargins(4, 4, 4, 4);
     stateRow->addWidget(m_lblState1);
-    stateRow->addWidget(new QLabel("→"));
+    stateRow->addWidget(new QLabel("→"), 0, Qt::AlignCenter);
     stateRow->addWidget(m_lblState2);
-    stateRow->addWidget(new QLabel("→"));
+    stateRow->addWidget(new QLabel("→"), 0, Qt::AlignCenter);
     stateRow->addWidget(m_lblState3);
-    stateRow->addWidget(new QLabel("→"));
+    stateRow->addWidget(new QLabel("→"), 0, Qt::AlignCenter);
     stateRow->addWidget(m_lblState4);
 
-    QLabel *robotIcon = new QLabel("🦾  →  📦  →  ⚙");
-    robotIcon->setAlignment(Qt::AlignCenter);
-    robotIcon->setStyleSheet("font-size:22px; color:#8b949e; padding:8px;");
-
     QVBoxLayout *opLayout = new QVBoxLayout(grpOpStatus);
+    opLayout->setSpacing(4);
     opLayout->addLayout(stateRow);
-    opLayout->addWidget(robotIcon);
 
     QHBoxLayout *row1 = new QHBoxLayout();
     row1->addWidget(grpSysCtrl, 3);
     row1->addWidget(grpOpStatus, 7);
 
+    // ── 1-3: PIR Sensor ─────────────────────────────────
+    QGroupBox *grpPir = new QGroupBox("🚨  PIR SENSOR  ⑥");
+    grpPir->setObjectName("panelGroup");
+
+    m_lblPirStatus = new QLabel("● INACTIVE");
+    m_lblPirStatus->setObjectName("pirInactive");
+    m_lblPirStatus->setAlignment(Qt::AlignCenter);
+
+    QVBoxLayout *pirLayout = new QVBoxLayout(grpPir);
+    pirLayout->setSpacing(4);
+    pirLayout->addWidget(m_lblPirStatus, 1, Qt::AlignCenter);
+
+    row1->addWidget(grpPir, 3);
+
     // ══════════════════════════════════════════════════════
     //  ROW 2:  [SERIAL]  [WEIGHT]  [COUNTERS]
     // ══════════════════════════════════════════════════════
-    // ── 2-1: Serial Connection ──────────────────────────
     QGroupBox *grpSerial = new QGroupBox("🔌  SERIAL CONNECTION STATUS");
     grpSerial->setObjectName("panelGroup");
 
-    m_cbPort    = new QComboBox();
+    m_cbPort     = new QComboBox();
     m_btnConnect = new QPushButton("CONNECT");
     m_btnConnect->setObjectName("btnBlue");
     m_lblConnStatus = new QLabel("● DISCONNECTED");
@@ -211,6 +211,8 @@ void MainWindow::setupUi()
 
     m_pbHeavy = new QProgressBar();
     m_pbLight = new QProgressBar();
+    m_pbHeavy->setObjectName("pbHeavy");
+    m_pbLight->setObjectName("pbLight");
     m_pbHeavy->setOrientation(Qt::Vertical);
     m_pbLight->setOrientation(Qt::Vertical);
     m_pbHeavy->setRange(0, 20);
@@ -252,8 +254,8 @@ void MainWindow::setupUi()
 
     // ══════════════════════════════════════════════════════
     //  ROW 3:  [PARAMETERS]  [LOG]  [CLI]
+    //  수정 ③: MCU TEMP / LED 위젯 제거 → REF WEIGHT + SAVE만 유지
     // ══════════════════════════════════════════════════════
-    // ── 3-1: Parameter Settings ─────────────────────────
     QGroupBox *grpParams = new QGroupBox("⚙  PARAMETER SETTINGS  ⑤");
     grpParams->setObjectName("panelGroup");
 
@@ -262,23 +264,11 @@ void MainWindow::setupUi()
     m_btnSaveSettings = new QPushButton("SAVE SETTINGS");
     m_btnSaveSettings->setObjectName("btnGreen");
 
-    QLabel *tempLabel = new QLabel("MCU TEMP");
-    m_lblTemp = new QLabel("-- °C");
-    m_lblTemp->setStyleSheet("color:#388bfd;font-size:16px;font-weight:bold;");
-
-    QLabel *ledLabel = new QLabel("LED");
-    m_lblLed = new QLabel("OFF");
-    m_lblLed->setStyleSheet("color:#8b949e;font-size:14px;font-weight:bold;");
-
-    QGridLayout *paramLayout = new QGridLayout(grpParams);
-    paramLayout->addWidget(refLabel,         0, 0);
-    paramLayout->addWidget(m_edRefWeight,    1, 0);
-    paramLayout->addWidget(m_btnSaveSettings,2, 0);
-    paramLayout->addWidget(makeSeparator(),  3, 0, 1, 2);
-    paramLayout->addWidget(tempLabel,        4, 0);
-    paramLayout->addWidget(m_lblTemp,        5, 0);
-    paramLayout->addWidget(ledLabel,         4, 1);
-    paramLayout->addWidget(m_lblLed,         5, 1);
+    QVBoxLayout *paramLayout = new QVBoxLayout(grpParams);
+    paramLayout->addWidget(refLabel);
+    paramLayout->addWidget(m_edRefWeight);
+    paramLayout->addWidget(m_btnSaveSettings);
+    paramLayout->addStretch();
 
     // ── 3-2: Log Output ─────────────────────────────────
     QGroupBox *grpLog = new QGroupBox("📋  SYSTEM LOG");
@@ -297,11 +287,10 @@ void MainWindow::setupUi()
     grpCli->setObjectName("panelGroup");
 
     m_cliInput   = new QLineEdit();
-    m_cliInput->setPlaceholderText("e.g. system on / mon on 200 / loadcell tare");
+    m_cliInput->setPlaceholderText("e.g. system on / loadcell tare / conv start");
     m_btnSendCli = new QPushButton("SEND");
     m_btnSendCli->setObjectName("btnBlue");
 
-    // Quick buttons
     auto makeQuick = [this](const QString &label, const QString &cmd) {
         QPushButton *b = new QPushButton(label);
         b->setObjectName("btnQuick");
@@ -314,12 +303,14 @@ void MainWindow::setupUi()
     QGridLayout *quickGrid = new QGridLayout();
     quickGrid->addWidget(makeQuick("system on",    "system on"),    0, 0);
     quickGrid->addWidget(makeQuick("system off",   "system off"),   0, 1);
-    quickGrid->addWidget(makeQuick("mon on 200",   "mon on 200"),   1, 0);
-    quickGrid->addWidget(makeQuick("mon off",      "mon off"),      1, 1);
-    quickGrid->addWidget(makeQuick("conv start",   "conv start"),   2, 0);
-    quickGrid->addWidget(makeQuick("conv stop",    "conv stop"),    2, 1);
-    quickGrid->addWidget(makeQuick("loadcell tare","loadcell tare"),3, 0);
-    quickGrid->addWidget(makeQuick("flag center",  "flag center"),  3, 1);
+    quickGrid->addWidget(makeQuick("conv start",   "conv start"),   1, 0);
+    quickGrid->addWidget(makeQuick("conv stop",    "conv stop"),    1, 1);
+    quickGrid->addWidget(makeQuick("loadcell tare","loadcell tare"),2, 0);
+    quickGrid->addWidget(makeQuick("flag center",  "flag center"),  2, 1);
+    quickGrid->addWidget(makeQuick("pir on",       "pir on"),       3, 0);
+    quickGrid->addWidget(makeQuick("pir off",      "pir off"),      3, 1);
+    quickGrid->addWidget(makeQuick("pir status",   "pir status"),   4, 0);
+    quickGrid->addWidget(makeQuick("pir read",     "pir read"),     4, 1);
 
     QHBoxLayout *cliRow = new QHBoxLayout();
     cliRow->addWidget(m_cliInput);
@@ -351,29 +342,26 @@ void MainWindow::setupUi()
 // ═══════════════════════════════════════════════════════════
 void MainWindow::setupConnections()
 {
-    // Serial
     connect(m_serial, &SerialWorker::dataReceived, m_parser, &PacketParser::feed);
     connect(m_serial, &SerialWorker::connected,    this, &MainWindow::onConnected);
     connect(m_serial, &SerialWorker::disconnected, this, &MainWindow::onDisconnected);
     connect(m_serial, &SerialWorker::errorOccurred,this, &MainWindow::onSerialError);
 
-    // Parser
     connect(m_parser, &PacketParser::packetParsed, this, &MainWindow::onPacketParsed);
     connect(m_parser, &PacketParser::logLine,       this, &MainWindow::onLogLine);
 
-    // Buttons
     connect(m_btnConnect,     &QPushButton::clicked, this, &MainWindow::onBtnConnect);
     connect(m_btnSysOn,       &QPushButton::clicked, this, &MainWindow::onBtnSystemOn);
     connect(m_btnSysOff,      &QPushButton::clicked, this, &MainWindow::onBtnSystemOff);
     connect(m_btnSysReset,    &QPushButton::clicked, this, &MainWindow::onBtnSystemReset);
     connect(m_btnTare,        &QPushButton::clicked, this, &MainWindow::onBtnTare);
-    connect(m_btnMonOn,       &QPushButton::clicked, this, &MainWindow::onBtnMonOn);
     connect(m_btnSendCli,     &QPushButton::clicked, this, &MainWindow::onBtnSendCli);
     connect(m_btnSaveSettings,&QPushButton::clicked, this, &MainWindow::onBtnSaveSettings);
     connect(m_cliInput, &QLineEdit::returnPressed,   this, &MainWindow::onBtnSendCli);
 
-    // Port refresh timer
     connect(m_portTimer, &QTimer::timeout, this, &MainWindow::refreshPorts);
+
+    connect(m_pirTimer,   &QTimer::timeout,      this, &MainWindow::onPirTimerTick);
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -385,10 +373,9 @@ void MainWindow::applyStyles()
         QMainWindow, QWidget {
             background-color: %1;
             color: %2;
-            font-family: 'Consolas', 'Courier New', monospace;
+            font-family: 'Consolas', 'Malgun Gothic', '맑은 고딕', 'Courier New', monospace;
             font-size: 13px;
         }
-
         QLabel#titleBar {
             background: qlineargradient(x1:0,y1:0,x2:1,y2:0,
                 stop:0 #1f2937, stop:1 #111827);
@@ -400,7 +387,6 @@ void MainWindow::applyStyles()
             border-radius: 4px;
             letter-spacing: 1px;
         }
-
         QGroupBox {
             background-color: %3;
             border: 1px solid %4;
@@ -417,7 +403,6 @@ void MainWindow::applyStyles()
             padding: 2px 8px;
             color: #8b949e;
         }
-
         QPushButton {
             border: 1px solid #30363d;
             border-radius: 4px;
@@ -426,217 +411,162 @@ void MainWindow::applyStyles()
             font-size: 12px;
             min-height: 32px;
         }
-        QPushButton#btnGreen {
-            background-color: #238636;
-            color: #fff;
-            border-color: #2ea043;
-        }
-        QPushButton#btnGreen:hover  { background-color: #2ea043; }
-        QPushButton#btnGreen:pressed{ background-color: #196127; }
-
-        QPushButton#btnRed {
-            background-color: #b91c1c;
-            color: #fff;
-            border-color: #da3633;
-        }
-        QPushButton#btnRed:hover  { background-color: #da3633; }
-        QPushButton#btnRed:pressed{ background-color: #7f1d1d; }
-
-        QPushButton#btnBlue {
-            background-color: #1d4ed8;
-            color: #fff;
-            border-color: #1f6feb;
-        }
-        QPushButton#btnBlue:hover  { background-color: #1f6feb; }
-        QPushButton#btnBlue:pressed{ background-color: #1e3a8a; }
-
+        QPushButton#btnGreen  { background-color:#238636; color:#fff; border-color:#2ea043; }
+        QPushButton#btnGreen:hover   { background-color:#2ea043; }
+        QPushButton#btnGreen:pressed { background-color:#196127; }
+        QPushButton#btnRed    { background-color:#b91c1c; color:#fff; border-color:#da3633; }
+        QPushButton#btnRed:hover     { background-color:#da3633; }
+        QPushButton#btnRed:pressed   { background-color:#7f1d1d; }
+        QPushButton#btnBlue   { background-color:#1d4ed8; color:#fff; border-color:#1f6feb; }
+        QPushButton#btnBlue:hover    { background-color:#1f6feb; }
+        QPushButton#btnBlue:pressed  { background-color:#1e3a8a; }
         QPushButton#btnOrange {
-            background-color: #92400e;
-            color: #e3b341;
-            border-color: #e3b341;
-            font-size: 16px;
-            min-height: 52px;
+            background-color:#92400e; color:#e3b341; border-color:#e3b341;
+            font-size:16px; min-height:52px;
         }
-        QPushButton#btnOrange:hover  { background-color: #b45309; }
-
+        QPushButton#btnOrange:hover  { background-color:#b45309; }
         QPushButton#btnQuick {
-            background-color: #21262d;
-            color: #8b949e;
-            border-color: #30363d;
-            padding: 5px 8px;
-            font-size: 11px;
-            min-height: 26px;
+            background-color:#21262d; color:#8b949e; border-color:#30363d;
+            padding:5px 8px; font-size:11px; min-height:26px;
         }
-        QPushButton#btnQuick:hover  { background-color: #30363d; color: #e6edf3; }
-
+        QPushButton#btnQuick:hover   { background-color:#30363d; color:#e6edf3; }
         QComboBox {
-            background-color: #21262d;
-            border: 1px solid #30363d;
-            border-radius: 4px;
-            padding: 5px 8px;
-            color: #e6edf3;
-            min-height: 30px;
+            background-color:#21262d; border:1px solid #30363d; border-radius:4px;
+            padding:5px 8px; color:#e6edf3; min-height:30px;
         }
-        QComboBox::drop-down { border: none; }
+        QComboBox::drop-down { border:none; }
         QComboBox QAbstractItemView {
-            background: #1c2128;
-            border: 1px solid #30363d;
-            color: #e6edf3;
-            selection-background-color: #1f6feb;
+            background:#1c2128; border:1px solid #30363d; color:#e6edf3;
+            selection-background-color:#1f6feb;
         }
-
         QLineEdit {
-            background-color: #21262d;
-            border: 1px solid #30363d;
-            border-radius: 4px;
-            padding: 5px 8px;
-            color: #e6edf3;
-            min-height: 28px;
+            background-color:#21262d; border:1px solid #30363d; border-radius:4px;
+            padding:5px 8px; color:#e6edf3; min-height:28px;
         }
-        QLineEdit:focus { border-color: #1f6feb; }
-
+        QLineEdit:focus { border-color:#1f6feb; }
         QTextEdit#logEdit {
-            background-color: #0d1117;
-            border: 1px solid #21262d;
-            border-radius: 4px;
-            color: #3fb950;
-            font-family: 'Consolas', monospace;
-            font-size: 12px;
-            padding: 4px;
+            background-color:#0d1117; border:1px solid #21262d; border-radius:4px;
+            color:#3fb950; font-family:'Consolas','Malgun Gothic','맑은 고딕',monospace; font-size:12px; padding:4px;
         }
-
         QLabel#weightDisplay {
-            color: #60a5fa;
-            font-size: 48px;
-            font-weight: bold;
-            font-family: 'Consolas', monospace;
+            color:#60a5fa; font-size:48px; font-weight:bold;
+            font-family:'Consolas',monospace;
         }
-        QLabel#sortResult {
-            font-size: 32px;
-            font-weight: bold;
-        }
-        QLabel#sortResultHeavy { color: #e3b341; }
-        QLabel#sortResultLight { color: #3fb950; }
-
+        QLabel#sortResult     { font-size:32px; font-weight:bold; }
         QLabel#stateBox {
-            background-color: #21262d;
-            border: 1px solid #30363d;
-            border-radius: 4px;
-            color: #8b949e;
-            font-size: 11px;
-            font-weight: bold;
+            background-color:#21262d; border:1px solid #30363d; border-radius:4px;
+            color:#8b949e; font-size:11px; font-weight:bold;
         }
         QLabel#stateBoxActive {
-            background-color: #1a3a2a;
-            border: 1px solid #2ea043;
-            border-radius: 4px;
-            color: #3fb950;
-            font-size: 11px;
-            font-weight: bold;
+            background-color:#1a3a2a; border:1px solid #2ea043; border-radius:4px;
+            color:#3fb950; font-size:11px; font-weight:bold;
         }
-
-        QLabel#lblConnected   { color: #3fb950; font-weight: bold; }
-        QLabel#lblDisconnected{ color: #8b949e; font-weight: bold; }
-        QLabel#labelMuted     { color: #8b949e; font-size: 11px; }
-
+        QLabel#lblConnected    { color:#3fb950; font-weight:bold; }
+        QLabel#lblDisconnected { color:#8b949e; font-weight:bold; }
+        QLabel#labelMuted      { color:#8b949e; font-size:11px; }
         QProgressBar {
-            background-color: #21262d;
-            border: 1px solid #30363d;
-            border-radius: 3px;
+            background-color:#21262d; border:1px solid #30363d; border-radius:3px;
         }
-        QProgressBar::chunk { background-color: #e3b341; border-radius: 2px; }
+        QProgressBar#pbHeavy::chunk { background-color:#e3b341; border-radius:2px; }
+        QProgressBar#pbLight::chunk { background-color:#3fb950; border-radius:2px; }
+        QScrollBar:vertical  { background:#161b22; width:8px; }
+        QScrollBar::handle:vertical { background:#30363d; border-radius:4px; }
 
-        QScrollBar:vertical {
-            background: #161b22;
-            width: 8px;
+        QLabel#pirDisabled {
+            background-color:#21262d; border:1px solid #30363d; border-radius:3px;
+            color:#8b949e; font-size:11px; font-weight:bold; padding:2px 6px;
         }
-        QScrollBar::handle:vertical {
-            background: #30363d;
-            border-radius: 4px;
+        QLabel#pirEnabled {
+            background-color:#1a3a1a; border:1px solid #2ea043; border-radius:3px;
+            color:#3fb950; font-size:11px; font-weight:bold; padding:2px 6px;
+        }
+        QLabel#pirInactive {
+            background-color:#21262d; border:1px solid #30363d; border-radius:4px;
+            color:#8b949e; font-size:28px; font-weight:bold;
+            min-height:80px;
+        }
+        QLabel#pirActive {
+            background-color:#1a3a1a; border:1px solid #2ea043; border-radius:4px;
+            color:#3fb950; font-size:28px; font-weight:bold;
+            min-height:80px;
+        }
+        QLabel#pirDetecting {
+            background-color:#3a0a0a; border:2px solid #da3633; border-radius:4px;
+            color:#ff6b6b; font-size:22px; font-weight:bold;
+            min-height:80px;
         }
     )")
-    .arg(CLR_BG, CLR_TEXT, CLR_PANEL, CLR_BORDER));
+                      .arg(CLR_BG, CLR_TEXT, CLR_PANEL, CLR_BORDER));
 }
 
 // ═══════════════════════════════════════════════════════════
-//  슬롯 구현
+//  무게 표시 공통 함수  (수정 ①②)
 // ═══════════════════════════════════════════════════════════
-void MainWindow::onPacketParsed(QMap<int, SensorNode> nodes)
+void MainWindow::updateWeightDisplay(float w)
 {
-    // 무게 (ID_OUT_MOTOR_SPEED=51 을 임시로 weight에 활용하거나,
-    //       ap.c에서 ID_ENV_HUMI=11 에 weight 저장하는지 확인 필요)
-    // ap.c를 보면 monitorUpdateValue로 보내는 ID를 직접 확인해야 함
-    // 여기서는 INT32로 오는 값 중 weight로 가장 그럴듯한 ID를 표시
-
-    for (auto it = nodes.begin(); it != nodes.end(); ++it) {
-        int id = it.key();
-        SensorNode &n = it.value();
-
-        switch (id) {
-        case ID_ENV_TEMP:  // 10 - 외부 온도 (ap.c에서 temp 보냄)
-        {
-            float t = n.value.toFloat();
-            m_lblTemp->setText(QString("%1 °C").arg(t, 0, 'f', 1));
-            break;
-        }
-        case ID_SYS_TEMP:  // 2 - MCU 내부 온도
-        {
-            float t = n.value.toFloat();
-            m_lblTemp->setText(QString("%1 °C").arg(t, 0, 'f', 1));
-            break;
-        }
-        case ID_OUT_LED_STATE:  // 50 - LED
-        {
-            bool on = n.value.toBool();
-            m_lblLed->setText(on ? "ON" : "OFF");
-            m_lblLed->setStyleSheet(on
-                ? "color:#3fb950;font-size:14px;font-weight:bold;"
-                : "color:#8b949e;font-size:14px;font-weight:bold;");
-            break;
-        }
-        case ID_SYS_UPTIME:  // 1 - uptime
-        {
-            // 표시용 (로그에만)
-            break;
-        }
-        case ID_ENV_HUMI:  // 11 - 무게 (ap.c에서 weight 전송용으로 사용)
-{
-    float w = n.value.toFloat();
     m_lastWeight = w;
     m_lblWeight->setText(QString("%1 g").arg(w, 0, 'f', 1));
 
     if (w < 5.0f) {
         m_lblSortResult->setText("---");
-        m_lblSortResult->setStyleSheet("font-size:32px;font-weight:bold;color:#8b949e;");
+        m_lblSortResult->setStyleSheet(
+            "font-size:32px;font-weight:bold;color:#8b949e;");
     } else if (w >= m_refWeight) {
         m_lblSortResult->setText("HEAVY");
-        m_lblSortResult->setStyleSheet("font-size:32px;font-weight:bold;color:#e3b341;");
+        m_lblSortResult->setStyleSheet(
+            "font-size:32px;font-weight:bold;color:#e3b341;");
     } else {
         m_lblSortResult->setText("LIGHT");
-        m_lblSortResult->setStyleSheet("font-size:32px;font-weight:bold;color:#3fb950;");
+        m_lblSortResult->setStyleSheet(
+            "font-size:32px;font-weight:bold;color:#3fb950;");
     }
-    break;
 }
+
+// ═══════════════════════════════════════════════════════════
+//  패킷 파싱 (수정 ①)
+//  - ID_LOADCELL_WEIGHT(20) 케이스를 명시적으로 추가
+//  - default 케이스도 유지 (fallback)
+// ═══════════════════════════════════════════════════════════
+void MainWindow::onPacketParsed(QMap<int, SensorNode> nodes)
+{
+    for (auto it = nodes.begin(); it != nodes.end(); ++it) {
+        int id         = it.key();
+        SensorNode &n  = it.value();
+
+        switch (id) {
+        // ── MCU 내부 온도 (표시 위젯 제거됐으므로 로그만) ──
+        case ID_SYS_TEMP:
+        case ID_ENV_TEMP:
+            // UI 위젯 제거됨 → 아무것도 안 함 (로그는 onLogLine이 처리)
+            break;
+
+        // ── LED ─────────────────────────────────────────
+        case ID_OUT_LED_STATE:
+            // TEMP/LED UI 제거했으므로 무시
+            break;
+
+        // ── Uptime ──────────────────────────────────────
+        case ID_SYS_UPTIME:
+            break;
+
+        // ── 로드셀 무게 (ID=20, ap.c에서 사용하는 실제 ID로 조정) ──
+        // STM32 ap.c 에서 monitorUpdateValue(20, TYPE_FLOAT, &weight) 처럼
+        // 보내는 ID를 확인 후 아래 숫자를 맞춰주세요.
+        case 11:   // ID_LOADCELL_WEIGHT — ap.c의 실제 ID로 변경하세요
+        {
+            float w = n.value.toFloat();
+            updateWeightDisplay(w);
+            break;
+        }
+
         default:
         {
-            // INT32 값 → weight로 해석 (ap.c에서 어떤 ID로 보내는지 확인 후 수정)
-            if (n.type == TYPE_INT32 || n.type == TYPE_FLOAT) {
+            // 알 수 없는 ID: FLOAT 또는 INT32이면 무게 후보로 해석
+            // (ap.c의 weight ID가 위 case에 없을 경우를 대비한 fallback)
+            if (n.type == TYPE_FLOAT || n.type == TYPE_INT32) {
                 float w = n.value.toFloat();
-                if (w >= 0 && w < 5000) {  // 합리적인 무게 범위
-                    m_lastWeight = w;
-                    m_lblWeight->setText(QString("%1 g").arg(w, 0, 'f', 1));
-
-                    bool isHeavy = (w >= m_refWeight);
-                    if (w < 5.0f) {
-                        m_lblSortResult->setText("---");
-                        m_lblSortResult->setStyleSheet("font-size:32px;font-weight:bold;color:#8b949e;");
-                    } else if (isHeavy) {
-                        m_lblSortResult->setText("HEAVY");
-                        m_lblSortResult->setStyleSheet("font-size:32px;font-weight:bold;color:#e3b341;");
-                    } else {
-                        m_lblSortResult->setText("LIGHT");
-                        m_lblSortResult->setStyleSheet("font-size:32px;font-weight:bold;color:#3fb950;");
-                    }
+                if (w >= 0.0f && w < 5000.0f) {
+                    updateWeightDisplay(w);
                 }
             }
             break;
@@ -645,32 +575,119 @@ void MainWindow::onPacketParsed(QMap<int, SensorNode> nodes)
     }
 }
 
-void MainWindow::onLogLine(const QString &line)
+// ═══════════════════════════════════════════════════════════
+//  로그 수신 (수정 ①: 로그 텍스트에서 무게 파싱 추가)
+// ═══════════════════════════════════════════════════════════
+void MainWindow::onLogLine(const QString &rawLine)
 {
-    // 시스템 상태 파악
-    if (line.contains("WAIT_OBJECT"))  updateStateLabel("WAIT_OBJECT");
-    else if (line.contains("MEASURING"))    updateStateLabel("MEASURING");
-    else if (line.contains("ARM_MOVING"))   updateStateLabel("ARM_MOVING");
-    else if (line.contains("CONVEYOR_RUNNING")) updateStateLabel("CONVEYOR_RUNNING");
-    else if (line.contains("DONE"))         updateStateLabel("DONE");
-    else if (line.contains("IDLE"))         updateStateLabel("IDLE");
+    // ── ANSI 이스케이프 코드 및 깨지는 제어문자 제거 ─────
+    // 1) \e[...m  형태의 ANSI 컬러/스타일 코드
+    static QRegularExpression reAnsi(R"(\x1B[\[\(][0-9;]*[A-Za-z])");
+    // 2) 단독 ESC 바이트 잔재
+    static QRegularExpression reEsc(R"(\x1B)");
+    // 3) 출력 불가 제어문자 (탭/개행 제외)
+    static QRegularExpression reCtrl(R"([\x00-\x08\x0B\x0C\x0E-\x1F\x7F])");
 
-    // 분류 카운트
-    if (line.contains("무거운 물체") || line.contains("FLAG LEFT")) {
+    QString line = rawLine;
+    line.replace(reAnsi, "");
+    line.replace(reEsc,  "");
+    line.replace(reCtrl, "");
+    line = line.trimmed();
+
+    // ── 로그에서 무게 파싱 ──────────────────────────────
+    // STM32 cliPrintf 형식 예:
+    //   "weight: 50.4"  /  "Weight=50.40g"  /  "loadcell: 50.4 g"
+    // 아래 정규식은 대부분의 형식을 커버합니다.
+    static QRegularExpression reWeight(
+        R"(weight=(-?[0-9]+\.?[0-9]*))",
+        QRegularExpression::CaseInsensitiveOption);
+
+    QRegularExpressionMatch m = reWeight.match(line);
+    if (m.hasMatch() && !line.contains("[SETTINGS]")) {
+        float w = m.captured(1).toFloat();
+        if (w >= 0.0f && w < 5000.0f)
+            updateWeightDisplay(w);
+    }
+
+    // ── PIR 상태 파싱 ─────────────────────────────────────
+    // pir.c output strings (English):
+    //   pirCheck  → "[PIR] Motion detected! Emergency stop"
+    //   pirCheck  → "[PIR] Detecting... Xs"
+    //   pirCheck  → "[PIR] Cleared (total Xs) -- run 'system on' to restart"
+    //   pir on    → "[PIR] Enabled"
+    //   pir off   → "[PIR] Disabled"
+    //   pir read  → "[PIR] State: Detected"  or  "None"
+    //   pir status→ "[PIR] enabled=ON  detecting=Detecting"  or  "None"
+    if (line.contains("[PIR]")) {
+        if (line.contains("Motion detected!") || line.contains("Detecting...")) {
+            if (!m_pirDetecting) {
+                m_pirElapsedSec = 0;
+                m_pirTimer->start();
+            }
+            updatePirStatus(true, true);
+
+        } else if (line.contains("Cleared")) {
+            m_pirTimer->stop();
+            updatePirStatus(true, false);
+
+        } else if (line.contains("Enabled")) {
+            updatePirStatus(true, false);
+
+        } else if (line.contains("Disabled")) {
+            m_pirTimer->stop();
+            updatePirStatus(false, false);
+
+        } else if (line.contains("State:")) {
+            bool detected = line.contains("Detected");
+            if (detected && !m_pirDetecting) {
+                m_pirElapsedSec = 0;
+                m_pirTimer->start();
+            } else if (!detected) {
+                m_pirTimer->stop();
+            }
+            updatePirStatus(m_pirEnabled, detected);
+
+        } else if (line.contains("enabled=")) {
+            bool en  = line.contains("enabled=ON");
+            bool det = line.contains("detecting=Detecting");
+            if (det && !m_pirDetecting) {
+                m_pirElapsedSec = 0;
+                m_pirTimer->start();
+            } else if (!det) {
+                m_pirTimer->stop();
+            }
+            updatePirStatus(en, det);
+        }
+    }
+
+    // system on → PIR auto-enable (ap.c calls pirEnable(true))
+    if (line.contains("[SYS]") && line.contains("PIR")) {
+        updatePirStatus(true, false);
+    }
+
+    // ── 시스템 상태 파악 ────────────────────────────────
+    if      (line.contains("WAIT_OBJECT"))      updateStateLabel("WAIT_OBJECT");
+    else if (line.contains("MEASURING"))        updateStateLabel("MEASURING");
+    else if (line.contains("ARM_MOVING"))       updateStateLabel("ARM_MOVING");
+    else if (line.contains("CONVEYOR_RUNNING")) updateStateLabel("CONVEYOR_RUNNING");
+    else if (line.contains("DONE"))             updateStateLabel("DONE");
+    else if (line.contains("IDLE"))             updateStateLabel("IDLE");
+
+    // ── 분류 카운트 ─────────────────────────────────────
+    if (line.contains("Heavy object") || line.contains("FLAG LEFT")) {
         m_heavyCount++;
         m_lblHeavyCount->setText(QString::number(m_heavyCount));
         m_pbHeavy->setValue(qMin(m_heavyCount, 20));
-    } else if (line.contains("가벼운 물체") || line.contains("FLAG RIGHT")) {
+    } else if (line.contains("Light object") || line.contains("FLAG RIGHT")) {
         m_lightCount++;
         m_lblLightCount->setText(QString::number(m_lightCount));
         m_pbLight->setValue(qMin(m_lightCount, 20));
     }
 
-    // 타임스탬프 붙여서 로그에 추가
+    // ── 타임스탬프 붙여서 로그에 추가 ──────────────────
     QString ts = QDateTime::currentDateTime().toString("hh:mm:ss.zzz");
     m_logEdit->append(QString("[%1] %2").arg(ts, line));
 
-    // 자동 스크롤
     QScrollBar *sb = m_logEdit->verticalScrollBar();
     sb->setValue(sb->maximum());
 }
@@ -678,13 +695,11 @@ void MainWindow::onLogLine(const QString &line)
 void MainWindow::updateStateLabel(const QString &state)
 {
     m_currentState = state;
-
     auto setActive = [](QLabel *l, bool active) {
         l->setObjectName(active ? "stateBoxActive" : "stateBox");
         l->style()->unpolish(l);
         l->style()->polish(l);
     };
-
     setActive(m_lblState1, state == "WAIT_OBJECT" || state == "MEASURING");
     setActive(m_lblState2, state == "ARM_MOVING");
     setActive(m_lblState3, state == "CONVEYOR_RUNNING");
@@ -698,7 +713,6 @@ void MainWindow::setConnectedState(bool connected)
     m_btnConnect->setObjectName(connected ? "btnRed" : "btnBlue");
     m_btnConnect->style()->unpolish(m_btnConnect);
     m_btnConnect->style()->polish(m_btnConnect);
-
     m_lblConnStatus->setObjectName(connected ? "lblConnected" : "lblDisconnected");
     m_lblConnStatus->style()->unpolish(m_lblConnStatus);
     m_lblConnStatus->style()->polish(m_lblConnStatus);
@@ -749,11 +763,27 @@ void MainWindow::onBtnSystemOff()
     updateStateLabel("IDLE");
 }
 
+// 수정 ④: SYSTEM RESET → HEAVY/LIGHT 카운터 초기화
 void MainWindow::onBtnSystemReset()
 {
     if (!m_isConnected) { onLogLine("[WARN] Not connected"); return; }
     m_serial->sendCommand("sys reset");
     onLogLine("[CMD] sys reset");
+
+    // 카운터 초기화
+    m_heavyCount = 0;
+    m_lightCount = 0;
+    m_lblHeavyCount->setText("0");
+    m_lblLightCount->setText("0");
+    m_pbHeavy->setValue(0);
+    m_pbLight->setValue(0);
+
+    // 무게/정렬 결과도 초기화
+    m_lblWeight->setText("--- g");
+    m_lblSortResult->setText("---");
+    m_lblSortResult->setStyleSheet("font-size:32px;font-weight:bold;color:#8b949e;");
+
+    onLogLine("[SYSTEM] Counters and weight display reset");
 }
 
 void MainWindow::onBtnTare()
@@ -761,22 +791,6 @@ void MainWindow::onBtnTare()
     if (!m_isConnected) { onLogLine("[WARN] Not connected"); return; }
     m_serial->sendCommand("loadcell tare");
     onLogLine("[CMD] loadcell tare");
-}
-
-void MainWindow::onBtnMonOn()
-{
-    if (!m_isConnected) { onLogLine("[WARN] Not connected"); return; }
-    if (!m_monOn) {
-        m_serial->sendCommand("mon on 200");
-        m_btnMonOn->setText("MON OFF");
-        m_monOn = true;
-        onLogLine("[CMD] mon on 200");
-    } else {
-        m_serial->sendCommand("mon off");
-        m_btnMonOn->setText("MON ON");
-        m_monOn = false;
-        onLogLine("[CMD] mon off");
-    }
 }
 
 void MainWindow::onBtnSendCli()
@@ -807,4 +821,46 @@ void MainWindow::refreshPorts()
         m_cbPort->addItem(p);
     int idx = m_cbPort->findText(current);
     if (idx >= 0) m_cbPort->setCurrentIndex(idx);
+}
+
+// ═══════════════════════════════════════════════════════════
+//  PIR 슬롯
+// ═══════════════════════════════════════════════════════════
+void MainWindow::onPirTimerTick()
+{
+    m_pirElapsedSec++;
+    // 감지 중이면 경과 시간 표시 갱신
+    if (m_pirDetecting) {
+        m_lblPirStatus->setText(
+            QString("⚠ DETECTED  %1s").arg(m_pirElapsedSec));
+    }
+}
+
+void MainWindow::updatePirStatus(bool enabled, bool detecting)
+{
+    m_pirEnabled   = enabled;
+    m_pirDetecting = detecting;
+
+    // ── 감지 상태 표시 ────────────────────────────────
+    if (detecting) {
+        m_lblPirStatus->setText(
+            QString("⚠ DETECTED  %1s").arg(m_pirElapsedSec));
+        m_lblPirStatus->setObjectName("pirDetecting");
+        if (!m_pirTimer->isActive()) {
+            m_pirElapsedSec = 0;
+            m_pirTimer->start();
+        }
+    } else {
+        m_pirElapsedSec = 0;
+        m_pirTimer->stop();
+        if (enabled) {
+            m_lblPirStatus->setText("● ACTIVE");
+            m_lblPirStatus->setObjectName("pirActive");
+        } else {
+            m_lblPirStatus->setText("● INACTIVE");
+            m_lblPirStatus->setObjectName("pirInactive");
+        }
+    }
+    m_lblPirStatus->style()->unpolish(m_lblPirStatus);
+    m_lblPirStatus->style()->polish(m_lblPirStatus);
 }

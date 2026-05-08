@@ -5,7 +5,7 @@ PacketParser::PacketParser(QObject *parent) : QObject(parent) {}
 
 void PacketParser::feed(const QByteArray &data)
 {
-    m_buf += QString::fromLatin1(data);
+    m_buf += QString::fromUtf8(data);
 
     // 완성된 패킷($...#)을 모두 추출
     while (true) {
