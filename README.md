@@ -8,7 +8,7 @@
 로드셀 센서를 통해 물체의 무게를 실시간으로 측정하고, 데이터 값에 따라 컨베이어 벨트 구동과 로봇팔의 피킹(Picking) 동작을 유기적으로 제어하는 통합 자동화 솔루션
 
 단순한 하드웨어 구동을 넘어, 센서 데이터의 신뢰성을 높이기 위한 필터링 알고리즘 적용과 팀 단위의 효율적인 형상 관리에 집중
-<img width="228" height="150" alt="image" src="https://github.com/user-attachments/assets/ece6f191-989e-493a-9fbb-7311f8829a23" />
+<img width="700" height="500" alt="image" src="https://github.com/user-attachments/assets/ece6f191-989e-493a-9fbb-7311f8829a23" />
 
 ## 🛠 기술 스택 (Tech Stack)
 ![C](https://img.shields.io/badge/C-A8B9CC?style=flat-square&logo=c&logoColor=white)
