@@ -34,4 +34,7 @@
 * **관리**: GitHub를 통한 형상 관리 및 주기적인 코드 리뷰를 통한 안정성 확보
 
 ---
-
+## 구현 영상
+[blue-light.mp4](attachment:b8c574d3-da0a-472f-ae29-85bd6aecc5b9:blue-light.mp4)
+[red-heavy.mp4](attachment:6c382635-d463-4b2c-918d-27388856910b:red-heavy.mp4)
+[pir.mp4](attachment:cf8ade70-8edf-4f38-8fd9-15a6d53f6904:pir.mp4)
