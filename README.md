@@ -32,7 +32,7 @@
 * **인원**: 6명
 * **역할**: 시스템 로직 설계, 하드웨어 인터페이스 제어, 데이터 필터링 구현
 * **관리**: GitHub를 통한 형상 관리 및 주기적인 코드 리뷰를 통한 안정성 확보
-
+* **Notion**: https://www.notion.so/Team-b97304a11b72836aa188015b787c27f1
 ---
 ## 구현 영상
 [blue-light.mp4](attachment:b8c574d3-da0a-472f-ae29-85bd6aecc5b9:blue-light.mp4)
