@@ -174,41 +174,6 @@ Weight-based-automatic-classification-system/
 ├── .gitignore
 └── README.md
 ```
-
----
-
-## 🚀 빌드 및 실행 방법
-
-### 1. 프로젝트 열기
-```
-STM32CubeIDE → File → Import → Existing Projects into Workspace
-→ stm31411_cli/ 폴더 선택
-```
-
-### 2. 빌드
-```
-Project → Build All  (또는 Ctrl+B)
-```
-
-### 3. 플래시 업로드
-```
-Run → Debug (F11)  →  STM32 Nucleo USB 연결 후 자동 플래시
-```
-
-### 4. CLI 모니터링 연결
-```bash
-# 시리얼 터미널 (예: minicom, PuTTY, Tera Term)
-Baudrate: 115200
-Port: /dev/ttyACM0  (Windows: COMx)
-```
-
-### 5. 모니터링 시작
-```
-monitor on          # 텔레메트리 스트리밍 시작
-led period 500      # LED 500ms 주기 점멸
-temp period 1000    # 온도 1초 주기 측정
-```
-
 ---
 
 ## 👥 팀 협업
