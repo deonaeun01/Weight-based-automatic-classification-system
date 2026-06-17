@@ -1,11 +1,12 @@
-# ⚖️ 무게 기반 자동 분류 시스템 (Weight-Based Automatic Classification System)
+# ⚖️ 무게 기반 자동 분류 시스템 (Weight-based Automatic Classification System)
 
-STM32 FreeRTOS를 활용한 로드셀 + 컨베이어 벨트 + 5축 로봇팔 통합 자동화 프로젝트
+STM32의 FreeRTOS를 활용한 로봇팔·컨베이어 벨트 통합 자동화 분류 프로젝트
 
 ---
 
 ## 📌 시스템 아키텍처
 
+```
 로드셀 (AD002 변환 모듈)
 └─── 아날로그 신호 ───▶ STM32 F411RE (Nucleo)
                                │
@@ -14,90 +15,7 @@ STM32 FreeRTOS를 활용한 로드셀 + 컨베이어 벨트 + 5축 로봇팔 통
                  이동 평균    컨베이어    5축 로봇팔
                  필터 처리    벨트 모터      피킹
                 (노이즈 제거)  (이송 제어)  (분류 동작)
-
-
----
-
-## 🛠 사용 하드웨어
-
-| 장치 | 역할 | 비고 |
-|---|---|---|
-| STM32 F411RE (Nucleo) | 메인 MCU — 센서 처리 및 모터 제어 | ARM Cortex-M4 |
-| 로드셀 + AD002 모듈 | 무게 측정 및 아날로그→디지털 변환 | 24-bit ADC 내장 모듈 |
-| 컨베이어 벨트 + 모터드라이버 | DC 모터를 통한 물체 이송 제어 | PWM 속도 제어 |
-| 5축 로봇팔 (서보모터) | 물체 피킹 및 목적지별 분류 동작 | 다축 서보 제어 |
-
----
-
-## 🔌 STM32 주요 인터페이스 설정
-
-| 기능 | Peripheral | 연결 및 역할 |
-|---|---|---|
-| **로드셀 신호 입력** | ADC / GPIO | AD002 모듈과의 인터페이스 및 디지털 변환 데이터 수집 |
-| **컨베이어 벨트 제어** | TIM PWM / GPIO | 모터 드라이버 방향 제어 및 PWM을 통한 속도 제어 |
-| **5축 로봇팔 제어** | TIM PWM (Multi-Ch) | 각 관절 서보모터 제어를 위한 다채널 PWM 펄스 출력 |
-
-> 💡 상세 핀맵 및 레지스터 설정은 각 프로젝트 폴더 내 `Core/Inc/` 헤더 파일들을 참고해 주세요.
-
----
-
-## ⚙️ 주요 기능 및 기술적 특징
-
-### ⚖️ 정밀 무게 측정 & 이동 평균 필터 (Moving Average Filter)
-- 로드셀 센서 특성상 발생하는 진동 및 전기적 노이즈를 제거하기 위해 **이동 평균 필터 알고리즘**을 소프트웨어적으로 구현했습니다.
-- 실시간으로 수집되는 무게 데이터의 변동 폭을 최소화하여 분류 판단의 정확도와 시스템 신뢰성을 높였습니다.
-
-### 🔄 FreeRTOS 기반 멀티태스킹 아키텍처
-시스템의 실시간성(Real-time)을 보장하기 위해 기능별로 독립된 Task를 부여하고 우선순위를 최적화했습니다.
-- **SensorTask (High)**: 로드셀 주기적 샘플링 및 필터링 연산 수행
-- **ControlTask (Normal)**: 무게 임계값 판별 및 전체 시퀀스(이송/동작) 상태 관리
-- **ActTask (Normal)**: 컨베이어 벨트 드라이버 및 로봇팔 서보모터 제어 
-
----
-
-## 📂 파일 구조
-
-Weight-based-automatic-classification-system/
-├── Koe/                        # STM32 프로젝트 (팀원 A - 메인 제어 로직)
-│   ├── Core/
-│   │   ├── Inc/                # 모듈화된 레이어별 헤더 파일
-│   │   └── Src/
-│   │       └── main.c          # FreeRTOS 커널 및 태스크 초기화
-│   └── ...
-└── stm32f411_cli/              # STM32 프로젝트 (팀원 B - 주변장치 인터페이스)
-├── Core/
-│   ├── Inc/
-│   └── Src/
-│       └── main.c
-└── ...
-
-> 🛠 **설계 특징**: 하드웨어 의존적인 헤더(.h) 파일과 비즈니스 로직 소스(.c) 파일을 명확히 분리·모듈화하여, 6인 팀원이 Git Conflict를 최소화하며 병렬 개발을 진행할 수 있도록 설계했습니다.
-
----
-
-## 🚀 빌드 및 실행
-
-### 개발 환경 준비
-- STM32CubeIDE 1.x 설치
-- STM32 F411RE (Nucleo) 보드 및 ST-LINK 드라이버 확인
-
-### 프로젝트 로드 및 실행
-1. `STM32CubeIDE` 실행 ➡️ `File` ➡️ `Import` ➡️ `Existing Projects into Workspace` 선택
-2. `Koe/` 또는 `stm32f411_cli/` 폴더를 루트로 지정하여 가져오기
-3. `Project` ➡️ `Build All (Ctrl+B)` 로 빌드 후 `Run` ➡️ `Run As` ➡️ `STM32 C/C++ Application`을 통해 타겟 보드에 플래시 및 실행
-
----
-
-## 👥 팀 협업 및 형상 관리
-
-| 항목 | 내용 |
-|---|---|
-| **인원** | 6명 (학부 팀 프로젝트) |
-| **역할 분담** | 시스템 시퀀스 아키텍처 설계 / 센서 신호처리 알고리즘 구현 / 하드웨어 인터페이스 제어 |
-| **형상 관리** | GitHub 브랜치 전략 기반 협업, 주기적인 코드 리뷰를 통한 안정적인 코드 Merge |
-| **문서화** | Notion 공유 페이지를 활용하여 요구사항 명세서, 회의록 및 하드웨어 회로도 관리 |
-
-📎 **프로젝트 Notion 공간**: [팀 노션 링크 이동](https://www.notion.so/Team-b97304a11b72836aa188015b787c27f1)
+```
 
 ---
 
@@ -112,9 +30,203 @@ Weight-based-automatic-classification-system/
 
 ---
 
-## 👨‍💻 개발 환경
+## 🛠 사용 하드웨어
 
-- STM32CubeIDE 1.x
-- STM32 HAL Library
-- FreeRTOS (CMSIS-RTOS v2)
-- Git / GitHub
+| 장치 | 역할 |
+|---|---|
+| STM32 F411RE (Nucleo) | 메인 MCU, FreeRTOS 실행, 전체 시퀀스 제어 |
+| 로드셀 + HX711 | 물체 무게 아날로그 측정 및 디지털 변환 |
+| PCA9685 | I2C 기반 16채널 PWM 서보 드라이버 |
+| 5축 로봇팔 | 물체 피킹(Picking) 및 분류 동작 |
+| 컨베이어 벨트 + 모터 | 물체 이송 |
+| 플래그 서보모터 | 중량/경량 분류 방향 지시 |
+| PIR 센서 | 물체 진입 감지 |
+| 온도 센서 | 주변 환경 온도 수집 |
+| LED | 시스템 상태 시각화 |
+
+---
+
+## 📡 통신 및 제어 인터페이스
+
+### CLI 명령어 (UART)
+```
+monitor on / monitor off     # 원격 모니터링 스트리밍 ON / OFF
+led period <ms>              # LED 점멸 주기 설정
+temp period <ms>             # 온도 측정 주기 설정
+status                       # 현재 시스템 상태 출력
+```
+
+### 모니터링 패킷 (UART 스트리밍)
+```
+WEIGHT:<g> TEMP:<°C> LED:<ON/OFF> STATE:<상태>
+```
+
+### 분류 기준
+```
+OBJECT_DETECT_G  이상 → 물체 감지 (측정 시작)
+HEAVY 기준값     이상 → 중량(Heavy) → 플래그 Left + 로봇팔 Left 이송
+HEAVY 기준값     미만 → 경량(Light) → 플래그 Right + 로봇팔 Right 이송
+OBJECT_RELEASE_G 이하 → 물체 이탈 (대기 복귀)
+```
+
+### 주요 인터페이스
+```
+| 기능 | Peripheral | 연결 및 역할 |
+|---|---|---|
+| **로드셀 신호 입력** | ADC / GPIO | AD002 모듈과의 인터페이스 및 디지털 변환 데이터 수집 |
+| **컨베이어 벨트 제어** | TIM PWM / GPIO | 모터 드라이버 방향 제어 및 PWM을 통한 속도 제어 |
+| **5축 로봇팔 제어** | TIM PWM (Multi-Ch) | 각 관절 서보모터 제어를 위한 다채널 PWM 펄스 출력 |
+```
+
+---
+
+## ⚙️ 주요 기능
+
+### ⚖️ 정밀 무게 측정 및 노이즈 필터링
+- 로드셀 + HX711을 통한 실시간 아날로그→디지털 무게 수집
+- **중간값 필터 (Median Filter)**: 순간적인 스파이크 노이즈 제거
+- **적응형 이동 평균 필터 (Adaptive EMA)**: 안정적인 무게 수렴값 산출
+- **영점 자동 추적 (Zero Tracking)**: 잔여 오차 자동 보정으로 장시간 정밀도 유지
+
+### 🤖 FSM 기반 자동화 공정 제어
+
+| 상태 | 동작 |
+|---|---|
+| `STATE_INIT` | 로봇팔 초기 위치 정렬 |
+| `STATE_WAIT_OBJECT` | 물체 투입 대기 |
+| `STATE_MEASURING` | 무게 안정화 후 중량/경량 판별, 플래그 서보 구동 |
+| `STATE_ARM_MOVING` | 로봇팔 분류 동작 완료까지 세마포어 대기 |
+| `STATE_CONVEYOR_RUNNING` | 컨베이어 벨트 3초 구동 후 대기 상태 복귀 |
+
+### 🦾 5축 로봇팔 부드러운 모션 제어
+- PCA9685 I2C 서보 드라이버를 통한 다축 동시 제어
+- `pca9685SetAngleSmooth()` 기반 보간 모션으로 자연스러운 피킹 동작 구현
+
+### 📡 원격 모니터링 (텔레메트리)
+- UART CLI를 통해 실시간 무게, 온도, LED 상태, 공정 상태 스트리밍
+- GUI 모니터링 프로그램 연동 지원
+
+---
+
+## 🔀 FreeRTOS 태스크 구성
+
+> CMSIS-RTOS v2 (FreeRTOS wrapper) 기반, 총 4개의 독립 태스크 운용
+
+| 태스크 | 주기 | 역할 |
+|---|---|---|
+| `loadCellSystemTask` | 250ms | 로드셀 데이터 수집, 필터링, 물체 감지/이탈 판단, 영점 추적 |
+| `systemTask` | 50ms | FSM 기반 전체 공정 시퀀스 제어 |
+| `armSystemTask` | 이벤트 구동 | 로봇팔 서보 모션 전담 (초기화 / 피킹 시퀀스) |
+| `monitorSystemTask` | 가변 (CLI 설정) | 모니터링 패킷 외부 송신 |
+
+### 💡 태스크 간 동기화 (Binary Semaphore)
+
+```
+systemTask                          armSystemTask
+    │                                     │
+    │  arm_running 플래그 SET              │
+    │ ──────────────────────────────────▶ │  로봇팔 모션 수행
+    │                                     │
+    │  osSemaphoreAcquire(g_arm_done_sem) │
+    │ ◀──────────────────────────────────── osSemaphoreRelease(g_arm_done_sem)
+    │  (대기 해제 → 다음 공정 진행)         │  (모션 완료 후 세마포어 릴리즈)
+```
+
+→ CPU 자원 낭비 없이 RTOS의 블로킹 대기를 활용한 클린 멀티태스킹 구조
+
+---
+
+## 🔌 STM32 핀 설정
+
+| 핀 | 기능 | 연결 대상 |
+|---|---|---|
+| PA0 | ADC or GPIO | HX711 DOUT (로드셀 데이터) |
+| PA1 | GPIO_OUTPUT | HX711 SCK (로드셀 클럭) |
+| PB6 | I2C1 SCL | PCA9685 SCL |
+| PB7 | I2C1 SDA | PCA9685 SDA |
+| PA2 | USART2 TX | CLI / 모니터링 UART TX |
+| PA3 | USART2 RX | CLI / 모니터링 UART RX |
+| PA5 | GPIO_OUTPUT | LED 상태 표시 |
+| PB0 | GPIO_INPUT | PIR 센서 |
+| TIM2 CH1 | PWM | 컨베이어 벨트 모터 드라이버 |
+| TIM2 CH2 | PWM | 플래그 서보모터 (Left/Right) |
+
+> ⚠️ 핀 정보는 STM32CubeIDE `.ioc` 파일 및 소스 코드 기준 — 정확한 정보는 `stm31411_cli/` 폴더 내 핀 설정 파일을 참고하세요.
+
+---
+
+## 🗄 파일 구조
+
+```
+Weight-based-automatic-classification-system/
+├── stm31411_cli/              # STM32 메인 펌웨어 (STM32CubeIDE 프로젝트)
+│   ├── Core/
+│   │   ├── Src/
+│   │   │   ├── main.c         # FreeRTOS 태스크 생성 및 시스템 초기화
+│   │   │   ├── freertos.c     # RTOS 태스크 정의 (4개 태스크)
+│   │   │   ├── loadcell.c     # 로드셀 측정 및 필터링 알고리즘
+│   │   │   ├── arm.c          # PCA9685 로봇팔 모션 제어
+│   │   │   ├── conveyor.c     # 컨베이어 벨트 PWM 제어
+│   │   │   └── cli.c          # UART CLI 명령 처리
+│   │   └── Inc/               # 헤더 파일 (.h)
+│   └── stm31411_cli.ioc       # STM32CubeIDE 핀 설정 파일
+├── Koe/                       # 팀원 개인 작업 폴더
+├── stm31411_cli.zip           # 프로젝트 압축본
+├── .gitignore
+└── README.md
+```
+
+---
+
+## 🚀 빌드 및 실행 방법
+
+### 1. 프로젝트 열기
+```
+STM32CubeIDE → File → Import → Existing Projects into Workspace
+→ stm31411_cli/ 폴더 선택
+```
+
+### 2. 빌드
+```
+Project → Build All  (또는 Ctrl+B)
+```
+
+### 3. 플래시 업로드
+```
+Run → Debug (F11)  →  STM32 Nucleo USB 연결 후 자동 플래시
+```
+
+### 4. CLI 모니터링 연결
+```bash
+# 시리얼 터미널 (예: minicom, PuTTY, Tera Term)
+Baudrate: 115200
+Port: /dev/ttyACM0  (Windows: COMx)
+```
+
+### 5. 모니터링 시작
+```
+monitor on          # 텔레메트리 스트리밍 시작
+led period 500      # LED 500ms 주기 점멸
+temp period 1000    # 온도 1초 주기 측정
+```
+
+---
+
+## 👥 팀 협업
+
+- **인원**: 6명
+- **형상 관리**: GitHub — 헤더(.h)와 소스(.c) 파일 분리로 모듈화, Merge 중심 코드 관리
+- **개발 환경**: STM32CubeIDE
+- **Notion**: [팀 협업 문서 바로가기](https://www.notion.so/Team-b97304a11b72836aa188015b787c27f1)
+
+---
+
+## 🌐 개발 환경
+
+| 항목 | 버전 |
+|---|---|
+| STM32CubeIDE | 2.1.1 |
+| CMSIS-RTOS v2 (FreeRTOS) | STM32Cube 내장 |
+| HAL Library | STM32F4xx HAL |
+| Target MCU | STM32 F411RE (Nucleo-64) |
+| 언어 | C / C++ |
