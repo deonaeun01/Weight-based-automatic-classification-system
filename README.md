@@ -1,6 +1,6 @@
 # ⚖️ 무게 기반 자동 분류 시스템 (Weight-Based Automatic Classification System)
 
-STM32 FreeRTOS를 활용한 로드셀 + 컨베이어 벨트 + 6축 로봇팔 통합 자동화 프로젝트
+STM32 FreeRTOS를 활용한 로드셀 + 컨베이어 벨트 + 5축 로봇팔 통합 자동화 프로젝트
 
 ---
 
@@ -12,7 +12,7 @@ STM32 FreeRTOS를 활용한 로드셀 + 컨베이어 벨트 + 6축 로봇팔 통
                                     │
                           ┌─────────┼─────────┐
                           │         │         │
-                    이동 평균    컨베이어    6축 로봇팔
+                    이동 평균    컨베이어    5축 로봇팔
                     필터 처리    벨트 모터      피킹
                    (노이즈 제거)  (이송 제어)  (분류 동작)
 ```
@@ -26,7 +26,7 @@ STM32 FreeRTOS를 활용한 로드셀 + 컨베이어 벨트 + 6축 로봇팔 통
 | STM32 F411RE (Nucleo) | 메인 MCU — 센서 처리 및 모터 제어 |
 | 로드셀 + AD002 모듈 | 무게 측정 및 아날로그→디지털 변환 |
 | 컨베이어 벨트 + 모터드라이버 | 물체 이송 |
-| 6축 로봇팔 (서보모터) | 물체 피킹 및 분류 |
+| 5축 로봇팔 (서보모터) | 물체 피킹 및 분류 |
 
 ---
 
@@ -53,7 +53,7 @@ STM32 FreeRTOS를 활용한 로드셀 + 컨베이어 벨트 + 6축 로봇팔 통
 ### 🏭 실시간 통합 제어 시퀀스
 - 무게 데이터 수집 → 필터링 → 분류 기준 판별
 - 컨베이어 벨트 구동으로 물체 이송
-- 6축 로봇팔 피킹(Picking) 동작으로 목적지 분류
+- 5축 로봇팔 피킹(Picking) 동작으로 목적지 분류
 
 ### 🔄 FreeRTOS 멀티태스킹
 - 센서 수집 / 필터링 / 모터 제어를 독립 태스크로 분리
@@ -139,7 +139,7 @@ Run → Debug (F11) 또는 Run As → STM32 C/C++ Application
 ![C](https://img.shields.io/badge/C-A8B9CC?style=flat-square&logo=c&logoColor=white)
 ![C++](https://img.shields.io/badge/C++-00599C?style=flat-square&logo=cplusplus&logoColor=white)
 ![STM32](https://img.shields.io/badge/STM32-03234B?style=flat-square&logo=stmicroelectronics&logoColor=white)
-![FreeRTOS](https://img.shields.io/badge/FreeRTOS-8CC84B?style=flat-square&logo=freertos&logoColor=white)
+![FreeRTOS](https://img.shields.io/badge/FreeRTOS-2C99DE?style=flat-square&logo=FreeRTOS&logoColor=white)
 ![Git](https://img.shields.io/badge/Git-F05032?style=flat-square&logo=git&logoColor=white)
 ![GitHub](https://img.shields.io/badge/GitHub-181717?style=flat-square&logo=github&logoColor=white)
 
